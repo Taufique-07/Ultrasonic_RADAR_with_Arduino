@@ -1,0 +1,149 @@
+// Import the Serial library
+import processing.serial.*;
+
+// Declare Serial object
+Serial myPort;
+
+// Variables to store angle and distance data from Arduino
+String angle = "";
+String distance = "";
+String rawData = "";
+String objectStatus = "";
+float pixelDistance;
+int angleInt, distanceInt;
+int index1;
+
+void setup() {
+  size(1200, 700);          // Set canvas size
+  smooth();                 // Enable anti-aliasing
+  myPort = new Serial(this, "COM6", 9600);  // Open serial port at 9600 baud
+  myPort.bufferUntil('.'); // Read serial data until '.' is encountered
+}
+
+void draw() {
+  backgroundFade();        // Fade background for radar sweep effect
+  drawRadar();             // Draw radar arcs and lines
+  drawScanLine();          // Draw current scan line based on angle
+  drawDetectedObject();    // Show object if within range
+  drawHUD();               // Display angle, distance, and labels
+}
+
+// Called automatically when data is received from serial
+void serialEvent(Serial port) {
+  rawData = port.readStringUntil('.');
+  if (rawData != null) {
+    rawData = trim(rawData);                // Remove whitespace
+    index1 = rawData.indexOf(",");          // Find the comma
+    if (index1 > 0) {
+      angle = rawData.substring(0, index1); // Extract angle
+      distance = rawData.substring(index1 + 1); // Extract distance
+      angleInt = constrain(int(angle), 0, 180); // Limit angle to 0–180
+      distanceInt = constrain(int(distance), 0, 100); // Limit distance
+    }
+  }
+}
+
+// Fade effect for radar sweep
+void backgroundFade() {
+  noStroke();
+  fill(0, 4);                     // Transparent black for fading effect
+  rect(0, 0, width, height * 0.935);
+  fill(98, 245, 31);              // Radar green color
+}
+
+// Draw radar arcs and angle lines
+void drawRadar() {
+  pushMatrix();
+  translate(width / 2, height * 0.926); // Move origin to bottom center
+
+  noFill();
+  strokeWeight(2);
+  stroke(98, 245, 31);
+
+  // Draw 4 semi-circular arcs
+  for (int i = 1; i <= 4; i++) {
+    float radius = width - width * (0.0625 + 0.207 * (i - 1));
+    arc(0, 0, radius, radius, PI, TWO_PI);
+  }
+
+  // Draw radial lines every 30 degrees
+  for (int a = 0; a <= 180; a += 30) {
+    float x = (width / 2) * cos(radians(a));
+    float y = (width / 2) * sin(radians(a));
+    line(0, 0, -x, -y);
+  }
+
+  popMatrix();
+}
+
+// Draw the scanning line (sweeping effect)
+void drawScanLine() {
+  pushMatrix();
+  translate(width / 2, height * 0.926);
+  strokeWeight(9);
+  stroke(30, 250, 60);               // Bright green for scanning line
+  float x = (height * 0.88) * cos(radians(angleInt));
+  float y = (height * 0.88) * sin(radians(angleInt));
+  line(0, 0, x, -y);                 // Scan line
+  popMatrix();
+}
+
+// Draw object when detected within 40cm
+void drawDetectedObject() {
+  if (distanceInt < 40) {
+    pushMatrix();
+    translate(width / 2, height * 0.926);
+    strokeWeight(9);
+    stroke(255, 10, 10);            // Red for detected object
+    pixelDistance = distanceInt * (height * 0.025); // Convert to pixels
+    float x1 = pixelDistance * cos(radians(angleInt));
+    float y1 = pixelDistance * sin(radians(angleInt));
+    float x2 = (width - width * 0.505) * cos(radians(angleInt));
+    float y2 = (width - width * 0.505) * sin(radians(angleInt));
+    line(x1, -y1, x2, -y2);         // Draw detection line
+    popMatrix();
+  }
+}
+
+// Draw Heads-Up Display (HUD)
+void drawHUD() {
+  pushMatrix();
+
+  // Draw background bar for text
+  fill(0);
+  noStroke();
+  rect(0, height - height * 0.0648, width, height);
+
+  // Draw distance markers
+  fill(98, 245, 31);
+  textSize(25);
+  text("10cm", width * 0.6146, height * 0.9167);
+  text("20cm", width * 0.719, height * 0.9167);
+  text("30cm", width * 0.823, height * 0.9167);
+  text("40cm", width * 0.9271, height * 0.9167);
+
+  // Draw radar labels
+  textSize(40);
+  text("SciCraft", width * 0.125, height * 0.9723);
+  text("Angle: " + angleInt + "°", width * 0.52, height * 0.9723);
+  text("Distance: " + (distanceInt < 40 ? distanceInt + " cm" : "--"), width * 0.74, height * 0.9723);
+
+  // Determine and display range status
+  objectStatus = distanceInt < 40 ? "In Range" : "Out of Range";
+
+  // Draw angle degree labels on radar
+  String[] degrees = { "30°", "60°", "90°", "120°", "150°" };
+  int[] angles = { 30, 60, 90, 120, 150 };
+  for (int i = 0; i < degrees.length; i++) {
+    resetMatrix(); // Reset transformation
+    float x = width / 2 + width / 2 * cos(radians(angles[i]));
+    float y = height * 0.909 - width / 2 * sin(radians(angles[i]));
+    translate(x, y);
+    rotate(radians(-90 + angles[i]));
+    textSize(25);
+    fill(98, 245, 60);              // Green for angle labels
+    text(degrees[i], 0, 0);
+  }
+
+  popMatrix();
+}
